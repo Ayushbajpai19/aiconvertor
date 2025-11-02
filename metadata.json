@@ -1,0 +1,5 @@
+{
+  "name": "Acme Statement Converter",
+  "description": "An intelligent tool to convert bank statement PDFs into clean, structured Excel files using AI. Features an elegant, Apple-inspired user interface for a seamless experience.",
+  "requestFramePermissions": []
+}
