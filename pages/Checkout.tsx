@@ -2,11 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { SubscriptionPlan } from '../lib/auth-types';
+import { BackButton } from '../components/BackButton';
+import { useAuth } from '../contexts/AuthContext';
+import { createCheckoutSession, isDodoPaymentsConfigured } from '../services/dodoPayments';
+import { Button } from '../components/Button';
 
 export const Checkout: React.FC = () => {
   const { planId } = useParams<{ planId: string }>();
   const [plan, setPlan] = useState<SubscriptionPlan | null>(null);
   const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState('');
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -29,6 +36,36 @@ export const Checkout: React.FC = () => {
       console.error('Error fetching plan:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCheckout = async () => {
+    if (!user || !profile || !plan) return;
+
+    setProcessing(true);
+    setError('');
+
+    try {
+      if (!isDodoPaymentsConfigured()) {
+        setError('Payment system is not configured. Please contact support.');
+        setProcessing(false);
+        return;
+      }
+
+      const checkoutUrl = await createCheckoutSession({
+        planId: plan.id,
+        userId: user.id,
+        userEmail: profile.email,
+        planName: plan.display_name,
+        amount: plan.price_monthly,
+        successUrl: `${window.location.origin}/?checkout=success`,
+        cancelUrl: `${window.location.origin}/pricing?checkout=cancelled`,
+      });
+
+      window.location.href = checkoutUrl;
+    } catch (err: any) {
+      setError(err.message || 'Failed to initiate checkout');
+      setProcessing(false);
     }
   };
 
@@ -61,6 +98,7 @@ export const Checkout: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 apple-gradient">
       <div className="max-w-2xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
+        <BackButton />
         <div className="bg-white rounded-2xl shadow-sm p-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Checkout</h1>
           <p className="text-gray-600 mb-8">Complete your subscription to {plan.display_name}</p>
@@ -80,26 +118,41 @@ export const Checkout: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
-            <h3 className="font-semibold text-blue-900 mb-2">Dodo Payments Integration</h3>
-            <p className="text-sm text-blue-800 mb-4">
-              To complete your subscription, you'll need to set up Dodo Payments integration.
-              This requires API keys from your Dodo Payments account.
-            </p>
-            <a
-              href="https://bolt.new/setup/stripe"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-            >
-              Setup Payment Integration
-            </a>
-          </div>
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-6">
+              {error}
+            </div>
+          )}
 
-          <div className="text-sm text-gray-600">
+          {!isDodoPaymentsConfigured() && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6">
+              <h3 className="font-semibold text-yellow-900 mb-2">Setup Required</h3>
+              <p className="text-sm text-yellow-800 mb-4">
+                Dodo Payments integration is not fully configured. Please set up your API keys.
+              </p>
+              <a
+                href="https://bolt.new/setup/stripe"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+              >
+                Setup Payment Integration
+              </a>
+            </div>
+          )}
+
+          <div className="text-sm text-gray-600 mb-6">
             <p className="mb-2">By continuing, you agree to our Terms & Conditions and Refund Policy.</p>
             <p>Your subscription will automatically renew monthly until cancelled.</p>
           </div>
+
+          <Button
+            onClick={handleCheckout}
+            disabled={processing || !isDodoPaymentsConfigured()}
+            className="w-full"
+          >
+            {processing ? 'Processing...' : 'Proceed to Payment'}
+          </Button>
         </div>
       </div>
     </div>

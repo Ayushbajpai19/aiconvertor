@@ -17,6 +17,7 @@ import { ArrowDownTrayIcon } from '../components/icons/ArrowDownTrayIcon';
 import { ClipboardDocumentIcon } from '../components/icons/ClipboardDocumentIcon';
 import { FilePasswordList } from '../components/FilePasswordList';
 import { PaywallModal } from '../components/PaywallModal';
+import { Footer } from '../components/Footer';
 
 export const Home: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
@@ -304,14 +305,17 @@ export const Home: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 apple-gradient">
-      <div className="container mx-auto px-4 py-8 sm:py-16">
-        <main className="flex items-center justify-center">
-          <div className="w-full transition-all duration-500 ease-in-out">
-            {renderContent()}
-          </div>
-        </main>
+    <div className="min-h-screen bg-gray-50 apple-gradient flex flex-col">
+      <div className="flex-grow">
+        <div className="container mx-auto px-4 py-8 sm:py-16">
+          <main className="flex items-center justify-center">
+            <div className="w-full transition-all duration-500 ease-in-out">
+              {renderContent()}
+            </div>
+          </main>
+        </div>
       </div>
+      <Footer />
       <PaywallModal isOpen={showPaywall} onClose={() => setShowPaywall(false)} />
     </div>
   );

@@ -1,9 +1,11 @@
 import React from 'react';
+import { BackButton } from '../components/BackButton';
 
 export const RefundPolicy: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 apple-gradient">
       <div className="max-w-4xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
+        <BackButton />
         <div className="bg-white rounded-2xl shadow-sm p-8 md:p-12">
           <h1 className="text-3xl font-bold text-gray-900 mb-6">Refund & Cancellation Policy</h1>
 

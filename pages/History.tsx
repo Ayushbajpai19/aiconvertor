@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowDownTrayIcon } from '../components/icons/ArrowDownTrayIcon';
+import { BackButton } from '../components/BackButton';
 
 interface ConversionRecord {
   id: string;
@@ -80,6 +81,7 @@ export const History: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 apple-gradient">
       <div className="max-w-7xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
+        <BackButton />
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Conversion History</h1>
           <p className="mt-2 text-gray-600">View and manage your past conversions</p>

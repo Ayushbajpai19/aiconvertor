@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { SubscriptionPlan } from '../lib/auth-types';
 import { Button } from '../components/Button';
+import { BackButton } from '../components/BackButton';
 
 export const Pricing: React.FC = () => {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
@@ -62,6 +63,7 @@ export const Pricing: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 apple-gradient">
       <div className="max-w-7xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
+        <BackButton />
         <div className="text-center mb-16">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
             Choose Your Plan

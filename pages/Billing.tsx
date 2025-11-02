@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
+import { BackButton } from '../components/BackButton';
 
 interface Payment {
   id: string;
@@ -52,6 +53,7 @@ export const Billing: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 apple-gradient">
       <div className="max-w-5xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
+        <BackButton />
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Billing & Subscription</h1>
           <p className="mt-2 text-gray-600">Manage your subscription and payment history</p>

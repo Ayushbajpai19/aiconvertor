@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '../components/Button';
+import { BackButton } from '../components/BackButton';
 
 export const Contact: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -33,6 +34,7 @@ export const Contact: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 apple-gradient">
       <div className="max-w-4xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
+        <BackButton />
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">Contact Us</h1>
           <p className="text-lg text-gray-600">
