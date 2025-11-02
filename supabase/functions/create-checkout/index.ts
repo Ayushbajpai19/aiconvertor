@@ -82,33 +82,63 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const requestBody = {
+      product_cart: [
+        {
+          product_id: plan.dodo_product_id,
+          quantity: 1,
+        },
+      ],
+      customer: {
+        email: profile.email,
+      },
+      return_url: successUrl,
+      metadata: {
+        plan_id: planId,
+        user_id: user.id,
+      },
+    };
+
+    console.log('Creating Dodo checkout with request:', JSON.stringify(requestBody, null, 2));
+
     const dodoResponse = await fetch(`${DODO_API_BASE}/checkouts`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${DODO_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        payment_link: {
-          product_id: plan.dodo_product_id,
-          customer_email: profile.email,
-          success_url: successUrl,
-          cancel_url: cancelUrl,
-        },
-        metadata: {
-          plan_id: planId,
-          user_id: user.id,
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    const responseBody = await dodoResponse.json();
+
     if (!dodoResponse.ok) {
-      const errorText = await dodoResponse.text();
-      console.error('Dodo API Error:', errorText);
-      throw new Error(`Failed to create checkout session: ${dodoResponse.status}`);
+      console.error('Dodo API Error:', {
+        status: dodoResponse.status,
+        statusText: dodoResponse.statusText,
+        body: responseBody,
+      });
+
+      return new Response(
+        JSON.stringify({
+          error: responseBody.message || `Payment provider error: ${dodoResponse.status}`,
+          details: responseBody,
+          configured: true,
+        }),
+        {
+          status: dodoResponse.status,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
     }
 
-    const data = await dodoResponse.json();
+    const data = responseBody;
+
+    const checkoutSessionId = data.checkout_session_id || data.id;
+    console.log('Checkout session created successfully:', { checkoutSessionId, url: data.url });
 
     const { error: subError } = await supabase.from('subscriptions').insert({
       user_id: user.id,
@@ -116,7 +146,7 @@ Deno.serve(async (req: Request) => {
       status: 'pending',
       current_period_start: new Date().toISOString(),
       current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      dodo_subscription_id: data.payment_link?.id || data.id,
+      dodo_subscription_id: checkoutSessionId,
     });
 
     if (subError) {
@@ -124,7 +154,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ url: data.payment_link?.url || data.url, configured: true }),
+      JSON.stringify({ url: data.url, configured: true }),
       {
         headers: {
           ...corsHeaders,

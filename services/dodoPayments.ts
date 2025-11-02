@@ -40,13 +40,22 @@ export const createCheckoutSession = async (params: CheckoutSessionParams): Prom
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to create checkout session');
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Checkout error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: errorData,
+      });
+
+      const errorMessage = errorData.error || errorData.message || 'Failed to create checkout session';
+      const details = errorData.details ? ` Details: ${JSON.stringify(errorData.details)}` : '';
+      throw new Error(`${errorMessage}${details}`);
     }
 
     const data: CheckoutResponse = await response.json();
 
     if (data.error) {
+      console.error('Checkout session error:', data.error);
       throw new Error(data.error);
     }
 
