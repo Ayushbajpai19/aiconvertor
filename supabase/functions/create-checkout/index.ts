@@ -11,8 +11,6 @@ const DODO_API_BASE = 'https://api.dodopayments.com/v1';
 
 interface CheckoutRequest {
   planId: string;
-  planName: string;
-  amount: number;
   successUrl: string;
   cancelUrl: string;
 }
@@ -42,7 +40,7 @@ Deno.serve(async (req: Request) => {
       throw new Error('Unauthorized');
     }
 
-    const { planId, planName, amount, successUrl, cancelUrl }: CheckoutRequest = await req.json();
+    const { planId, successUrl, cancelUrl }: CheckoutRequest = await req.json();
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -52,6 +50,20 @@ Deno.serve(async (req: Request) => {
 
     if (!profile) {
       throw new Error('Profile not found');
+    }
+
+    const { data: plan, error: planError } = await supabase
+      .from('subscription_plans')
+      .select('*')
+      .eq('id', planId)
+      .single();
+
+    if (planError || !plan) {
+      throw new Error('Plan not found');
+    }
+
+    if (!plan.dodo_product_id) {
+      throw new Error('This plan is not available for purchase');
     }
 
     if (!DODO_API_KEY) {
@@ -70,24 +82,19 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const dodoResponse = await fetch(`${DODO_API_BASE}/checkout/sessions`, {
+    const dodoResponse = await fetch(`${DODO_API_BASE}/payments`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${DODO_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        customer_email: profile.email,
-        line_items: [
-          {
-            name: planName,
-            amount: amount * 100,
-            currency: 'USD',
-            quantity: 1,
-          },
-        ],
-        success_url: successUrl,
-        cancel_url: cancelUrl,
+        payment_link: {
+          product_id: plan.dodo_product_id,
+          customer_email: profile.email,
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+        },
         metadata: {
           plan_id: planId,
           user_id: user.id,
@@ -96,23 +103,28 @@ Deno.serve(async (req: Request) => {
     });
 
     if (!dodoResponse.ok) {
-      const errorData = await dodoResponse.json();
-      throw new Error(errorData.message || 'Failed to create checkout session');
+      const errorText = await dodoResponse.text();
+      console.error('Dodo API Error:', errorText);
+      throw new Error(`Failed to create checkout session: ${dodoResponse.status}`);
     }
 
     const data = await dodoResponse.json();
 
-    await supabase.from('subscriptions').insert({
+    const { error: subError } = await supabase.from('subscriptions').insert({
       user_id: user.id,
       plan_id: planId,
       status: 'pending',
       current_period_start: new Date().toISOString(),
       current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      dodo_subscription_id: data.id || data.session_id,
+      dodo_subscription_id: data.payment_link?.id || data.id,
     });
 
+    if (subError) {
+      console.error('Subscription insert error:', subError);
+    }
+
     return new Response(
-      JSON.stringify({ url: data.url, configured: true }),
+      JSON.stringify({ url: data.payment_link?.url || data.url, configured: true }),
       {
         headers: {
           ...corsHeaders,

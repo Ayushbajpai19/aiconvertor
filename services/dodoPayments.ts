@@ -34,8 +34,6 @@ export const createCheckoutSession = async (params: CheckoutSessionParams): Prom
       },
       body: JSON.stringify({
         planId: params.planId,
-        planName: params.planName,
-        amount: params.amount,
         successUrl: params.successUrl,
         cancelUrl: params.cancelUrl,
       }),
