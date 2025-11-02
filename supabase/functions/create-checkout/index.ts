@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const DODO_API_KEY = Deno.env.get('DODO_API_KEY');
-const DODO_API_BASE = 'https://api.dodopayments.com/v1';
+const DODO_API_BASE = 'https://test.dodopayments.com';
 
 interface CheckoutRequest {
   planId: string;
@@ -82,7 +82,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const dodoResponse = await fetch(`${DODO_API_BASE}/payments`, {
+    const dodoResponse = await fetch(`${DODO_API_BASE}/checkouts`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${DODO_API_KEY}`,
