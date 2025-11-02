@@ -124,23 +124,6 @@ export const Checkout: React.FC = () => {
             </div>
           )}
 
-          {!isDodoPaymentsConfigured() && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6">
-              <h3 className="font-semibold text-yellow-900 mb-2">Setup Required</h3>
-              <p className="text-sm text-yellow-800 mb-4">
-                Dodo Payments integration is not fully configured. Please set up your API keys.
-              </p>
-              <a
-                href="https://bolt.new/setup/stripe"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-              >
-                Setup Payment Integration
-              </a>
-            </div>
-          )}
-
           <div className="text-sm text-gray-600 mb-6">
             <p className="mb-2">By continuing, you agree to our Terms & Conditions and Refund Policy.</p>
             <p>Your subscription will automatically renew monthly until cancelled.</p>
@@ -148,7 +131,7 @@ export const Checkout: React.FC = () => {
 
           <Button
             onClick={handleCheckout}
-            disabled={processing || !isDodoPaymentsConfigured()}
+            disabled={processing}
             className="w-full"
           >
             {processing ? 'Processing...' : 'Proceed to Payment'}

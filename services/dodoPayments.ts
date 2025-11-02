@@ -1,5 +1,4 @@
-const DODO_API_KEY = import.meta.env.VITE_DODO_API_KEY;
-const DODO_API_BASE = 'https://api.dodopayments.com/v1';
+import { supabase } from '../lib/supabase';
 
 interface CheckoutSessionParams {
   planId: string;
@@ -11,39 +10,56 @@ interface CheckoutSessionParams {
   cancelUrl: string;
 }
 
+interface CheckoutResponse {
+  url?: string;
+  error?: string;
+  configured: boolean;
+}
+
 export const createCheckoutSession = async (params: CheckoutSessionParams): Promise<string> => {
   try {
-    const response = await fetch(`${DODO_API_BASE}/checkout/sessions`, {
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      throw new Error('You must be logged in to create a checkout session');
+    }
+
+    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout`;
+
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${DODO_API_KEY}`,
+        'Authorization': `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        customer_email: params.userEmail,
-        line_items: [
-          {
-            name: params.planName,
-            amount: params.amount * 100,
-            currency: 'USD',
-            quantity: 1,
-          },
-        ],
-        success_url: params.successUrl,
-        cancel_url: params.cancelUrl,
-        metadata: {
-          plan_id: params.planId,
-          user_id: params.userId,
-        },
+        planId: params.planId,
+        planName: params.planName,
+        amount: params.amount,
+        successUrl: params.successUrl,
+        cancelUrl: params.cancelUrl,
       }),
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to create checkout session');
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to create checkout session');
     }
 
-    const data = await response.json();
+    const data: CheckoutResponse = await response.json();
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    if (!data.configured) {
+      throw new Error('Payment system is not configured. Please contact support.');
+    }
+
+    if (!data.url) {
+      throw new Error('No checkout URL returned');
+    }
+
     return data.url;
   } catch (error) {
     console.error('Dodo Payments error:', error);
@@ -52,5 +68,5 @@ export const createCheckoutSession = async (params: CheckoutSessionParams): Prom
 };
 
 export const isDodoPaymentsConfigured = (): boolean => {
-  return !!DODO_API_KEY && DODO_API_KEY.length > 0;
+  return true;
 };
