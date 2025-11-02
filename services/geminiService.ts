@@ -11,11 +11,12 @@ import {
 } from '../constants';
 
 const getApiKey = (): string => {
-  if (!process.env.API_KEY) {
-    console.error("API_KEY environment variable not set.");
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error("VITE_GEMINI_API_KEY environment variable not set.");
     throw new Error("API key is not configured. Please contact support.");
   }
-  return process.env.API_KEY;
+  return apiKey;
 }
 
 export async function extractTransactions(pdfImages: string[], sourceFile: string): Promise<Transaction[]> {
