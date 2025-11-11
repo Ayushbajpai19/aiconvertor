@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const DODO_API_KEY = Deno.env.get('DODO_API_KEY');
-const DODO_API_BASE = 'https://test.dodopayments.com';
+const DODO_API_BASE = 'https://api.dodopayments.com';
 
 interface CheckoutRequest {
   planId: string;
@@ -137,8 +137,34 @@ Deno.serve(async (req: Request) => {
 
     const data = responseBody;
 
-    const checkoutSessionId = data.checkout_session_id || data.id;
-    console.log('Checkout session created successfully:', { checkoutSessionId, url: data.url });
+    console.log('Dodo API Success Response (full):', JSON.stringify(data, null, 2));
+
+    const checkoutUrl = data.url || data.checkout_url || data.payment_url || data.redirect_url;
+    const checkoutSessionId = data.checkout_session_id || data.session_id || data.id;
+
+    console.log('Extracted values:', {
+      checkoutSessionId,
+      checkoutUrl,
+      allKeys: Object.keys(data)
+    });
+
+    if (!checkoutUrl) {
+      console.error('No checkout URL found in response. Full response:', data);
+      return new Response(
+        JSON.stringify({
+          error: 'Payment provider did not return a checkout URL',
+          details: data,
+          configured: true,
+        }),
+        {
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
 
     const { error: subError } = await supabase.from('subscriptions').insert({
       user_id: user.id,
@@ -154,7 +180,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ url: data.url, configured: true }),
+      JSON.stringify({ url: checkoutUrl, configured: true }),
       {
         headers: {
           ...corsHeaders,
