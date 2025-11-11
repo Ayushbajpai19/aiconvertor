@@ -110,7 +110,31 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify(requestBody),
     });
 
-    const responseBody = await dodoResponse.json();
+    const responseText = await dodoResponse.text();
+    console.log('Dodo API Response Status:', dodoResponse.status);
+    console.log('Dodo API Response Text:', responseText);
+
+    let responseBody;
+    try {
+      responseBody = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse Dodo API response:', parseError);
+      console.error('Raw response:', responseText);
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid response from payment provider',
+          details: { rawResponse: responseText, parseError: parseError.message },
+          configured: true,
+        }),
+        {
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
 
     if (!dodoResponse.ok) {
       console.error('Dodo API Error:', {
@@ -121,7 +145,7 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({
-          error: responseBody.message || `Payment provider error: ${dodoResponse.status}`,
+          error: responseBody.message || responseBody.error || `Payment provider error: ${dodoResponse.status}`,
           details: responseBody,
           configured: true,
         }),
