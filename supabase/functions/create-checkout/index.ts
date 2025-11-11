@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const DODO_API_KEY = Deno.env.get('DODO_API_KEY');
-const DODO_API_BASE = 'https://api.dodopayments.com';
+const DODO_API_BASE = 'https://live.dodopayments.com';
 
 interface CheckoutRequest {
   planId: string;
