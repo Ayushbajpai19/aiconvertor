@@ -53,11 +53,11 @@ Deno.serve(async (req: Request) => {
       throw new Error('Unauthorized');
     }
 
-    const { planId, successUrl, cancelUrl }: CheckoutRequest = await req.json();
+    const { planId, successUrl, cancelUrl, customerInfo = {}, metadata = {} }: CheckoutRequest = await req.json();
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('email')
+      .select('email, full_name')
       .eq('id', user.id)
       .single();
 
@@ -81,9 +81,9 @@ Deno.serve(async (req: Request) => {
 
     if (!DODO_API_KEY) {
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: 'Payment system not configured',
-          configured: false 
+          configured: false
         }),
         {
           status: 200,
@@ -95,6 +95,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Enhanced request body with proper Dodo API format
     const requestBody = {
       product_cart: [
         {
@@ -104,11 +105,18 @@ Deno.serve(async (req: Request) => {
       ],
       customer: {
         email: profile.email,
+        name: customerInfo.name || profile.full_name || '',
+        phone_number: customerInfo.phone_number || undefined,
+        ...(customerInfo.billing_address && { billing_address: customerInfo.billing_address }),
       },
       return_url: successUrl,
       metadata: {
         plan_id: planId,
         user_id: user.id,
+        plan_name: plan.name,
+        plan_display_name: plan.display_name,
+        price_monthly: plan.price_monthly.toString(),
+        ...metadata,
       },
     };
 
