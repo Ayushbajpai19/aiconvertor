@@ -28,6 +28,10 @@ interface CheckoutRequest {
   metadata?: Record<string, string>;
 }
 
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -40,7 +44,7 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const authHeader = req.headers.get('Authorization')!;
-    
+
     const supabase = createClient(supabaseUrl, supabaseKey, {
       global: {
         headers: { Authorization: authHeader },
@@ -48,7 +52,7 @@ Deno.serve(async (req: Request) => {
     });
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
+
     if (authError || !user) {
       throw new Error('Unauthorized');
     }
@@ -136,7 +140,6 @@ Deno.serve(async (req: Request) => {
             'User-Agent': 'AIConvertor/1.0',
           },
           body: JSON.stringify(requestBody),
-          timeout: 10000, // 10 second timeout
         });
 
         const responseText = await dodoResponse.text();
@@ -146,110 +149,131 @@ Deno.serve(async (req: Request) => {
           responseText: responseText.substring(0, 1000), // Limit log size
         });
 
-    let responseBody;
-    try {
-      responseBody = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('Failed to parse Dodo API response:', parseError);
-      console.error('Raw response:', responseText);
-      return new Response(
-        JSON.stringify({
-          error: 'Invalid response from payment provider',
-          details: { rawResponse: responseText, parseError: parseError.message },
-          configured: true,
-        }),
-        {
-          status: 500,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json',
-          },
+        let responseBody;
+        try {
+          responseBody = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('Failed to parse Dodo API response:', parseError);
+          console.error('Raw response:', responseText);
+          throw new Error('Invalid response from payment provider');
         }
-      );
-    }
 
-    if (!dodoResponse.ok) {
-      console.error('Dodo API Error:', {
-        status: dodoResponse.status,
-        statusText: dodoResponse.statusText,
-        body: responseBody,
-      });
+        if (!dodoResponse.ok) {
+          console.error('Dodo API Error:', {
+            status: dodoResponse.status,
+            statusText: dodoResponse.statusText,
+            body: responseBody,
+          });
 
-      return new Response(
-        JSON.stringify({
-          error: responseBody.message || responseBody.error || `Payment provider error: ${dodoResponse.status}`,
-          details: responseBody,
-          configured: true,
-        }),
-        {
-          status: dodoResponse.status,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json',
-          },
+          // Don't retry on client errors (4xx)
+          if (dodoResponse.status >= 400 && dodoResponse.status < 500) {
+            return new Response(
+              JSON.stringify({
+                error: responseBody.message || responseBody.error || `Payment provider error: ${dodoResponse.status}`,
+                details: responseBody,
+                configured: true,
+              }),
+              {
+                status: dodoResponse.status,
+                headers: {
+                  ...corsHeaders,
+                  'Content-Type': 'application/json',
+                },
+              }
+            );
+          }
+
+          throw new Error(`Dodo API error: ${dodoResponse.status} ${dodoResponse.statusText}`);
         }
-      );
-    }
 
-    const data = responseBody;
+        const data = responseBody;
+        console.log('Dodo API Success Response (full):', JSON.stringify(data, null, 2));
 
-    console.log('Dodo API Success Response (full):', JSON.stringify(data, null, 2));
+        const checkoutUrl = data.checkout_url || data.url || data.payment_url || data.redirect_url;
+        const checkoutSessionId = data.checkout_session_id || data.session_id || data.id;
 
-    const checkoutUrl = data.url || data.checkout_url || data.payment_url || data.redirect_url;
-    const checkoutSessionId = data.checkout_session_id || data.session_id || data.id;
+        console.log('Extracted values:', {
+          checkoutSessionId,
+          checkoutUrl,
+          allKeys: Object.keys(data)
+        });
 
-    console.log('Extracted values:', {
-      checkoutSessionId,
-      checkoutUrl,
-      allKeys: Object.keys(data)
-    });
-
-    if (!checkoutUrl) {
-      console.error('No checkout URL found in response. Full response:', data);
-      return new Response(
-        JSON.stringify({
-          error: 'Payment provider did not return a checkout URL',
-          details: data,
-          configured: true,
-        }),
-        {
-          status: 500,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json',
-          },
+        if (!checkoutUrl) {
+          throw new Error('Payment provider did not return a checkout URL');
         }
-      );
+
+        // Create pending subscription record
+        const subscriptionData = {
+          user_id: user.id,
+          plan_id: planId,
+          status: 'pending',
+          current_period_start: new Date().toISOString(),
+          current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          billing_period_start: new Date().toISOString(),
+          billing_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          dodo_subscription_id: checkoutSessionId,
+        };
+
+        const { error: subError } = await supabase.from('subscriptions').insert(subscriptionData);
+
+        if (subError) {
+          console.error('Subscription insert error:', subError);
+          // Don't fail the checkout, but log the error for debugging
+        }
+
+        return new Response(
+          JSON.stringify({
+            url: checkoutUrl,
+            sessionId: checkoutSessionId,
+            configured: true
+          }),
+          {
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+      } catch (error) {
+        lastError = error as Error;
+        console.error(`Checkout attempt ${attempt} failed:`, error);
+
+        // Don't retry on the last attempt
+        if (attempt === maxRetries) {
+          break;
+        }
+
+        // Exponential backoff: 1s, 2s, 4s
+        const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
+        console.log(`Retrying in ${delayMs}ms...`);
+        await sleep(delayMs);
+      }
     }
 
-    const { error: subError } = await supabase.from('subscriptions').insert({
-      user_id: user.id,
-      plan_id: planId,
-      status: 'pending',
-      current_period_start: new Date().toISOString(),
-      current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      dodo_subscription_id: checkoutSessionId,
-    });
-
-    if (subError) {
-      console.error('Subscription insert error:', subError);
-    }
-
+    // All retries failed
+    console.error('All checkout attempts failed. Last error:', lastError);
     return new Response(
-      JSON.stringify({ url: checkoutUrl, configured: true }),
+      JSON.stringify({
+        error: lastError?.message || 'Payment service temporarily unavailable',
+        configured: true,
+        retryAttempts: maxRetries
+      }),
       {
+        status: 503,
         headers: {
           ...corsHeaders,
           'Content-Type': 'application/json',
         },
       }
     );
+
   } catch (error) {
     console.error('Checkout error:', error);
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: error.message || 'Internal server error',
-        configured: true 
+        configured: true
       }),
       {
         status: 500,
