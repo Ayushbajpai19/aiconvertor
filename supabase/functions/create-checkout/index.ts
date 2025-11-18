@@ -7,12 +7,25 @@ const corsHeaders = {
 };
 
 const DODO_API_KEY = Deno.env.get('DODO_API_KEY');
+const DODO_WEBHOOK_SECRET = Deno.env.get('DODO_WEBHOOK_SECRET');
 const DODO_API_BASE = 'https://live.dodopayments.com';
 
 interface CheckoutRequest {
   planId: string;
   successUrl: string;
   cancelUrl: string;
+  customerInfo?: {
+    name?: string;
+    phone_number?: string;
+    billing_address?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      country?: string;
+      zipcode?: string;
+    };
+  };
+  metadata?: Record<string, string>;
 }
 
 Deno.serve(async (req: Request) => {
