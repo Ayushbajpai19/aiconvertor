@@ -122,18 +122,29 @@ Deno.serve(async (req: Request) => {
 
     console.log('Creating Dodo checkout with request:', JSON.stringify(requestBody, null, 2));
 
-    const dodoResponse = await fetch(`${DODO_API_BASE}/checkouts`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${DODO_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
+    // Retry logic for transient failures
+    let lastError: Error | null = null;
+    const maxRetries = 3;
 
-    const responseText = await dodoResponse.text();
-    console.log('Dodo API Response Status:', dodoResponse.status);
-    console.log('Dodo API Response Text:', responseText);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const dodoResponse = await fetch(`${DODO_API_BASE}/checkouts`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${DODO_API_KEY}`,
+            'Content-Type': 'application/json',
+            'User-Agent': 'AIConvertor/1.0',
+          },
+          body: JSON.stringify(requestBody),
+          timeout: 10000, // 10 second timeout
+        });
+
+        const responseText = await dodoResponse.text();
+        console.log(`Dodo API Response (attempt ${attempt}):`, {
+          status: dodoResponse.status,
+          statusText: dodoResponse.statusText,
+          responseText: responseText.substring(0, 1000), // Limit log size
+        });
 
     let responseBody;
     try {
